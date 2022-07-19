@@ -4,13 +4,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <cmath>
 #include <string>
 
 /*
 
-    - item option (need to be fixed)
-    - get info is useless
-
+    problems with scrolling back / forward exist sometimes
 */
 
 using namespace std;
@@ -39,7 +38,7 @@ struct bassInfo
 }; // 14
 struct guitarInfo
 {
-    unsInt strings : 5;
+    unsInt strings : 6;
     enum neck neck : 2;
     unsInt frets : 6;
     enum handOrientation hand : 1;
@@ -117,13 +116,11 @@ void initDataBase(struct dBase *dB);
 
 void delDataBase(struct dBase *dB);
 
-void createNewElement(struct dBase *dB);
-
-struct dBaseElement *getInfo(enum instr instr_categ);
-
 void readFromFile(struct dBase *dB, FILE *file);
 
-struct foundElemData *findElem(struct dBCategory *givenCateg, struct dBaseElement *potElement);
+struct foundElemData *findElem(struct dBase *dB, struct dBaseElement *potElement);
+
+struct dBCategory *getCateg(struct dBase *dB, struct dBaseElement *elem);
 
 void withdrawElements(struct dBase *dB, struct dBaseElement *elemToWithdrow, int numbToWithdraw);
 
@@ -139,9 +136,11 @@ void printCategInfo(struct dBCategory *category);
 
 void delElem(struct dBase *dB, struct dBaseElement *elemToDel);
 
-void itemOption(struct dBase *dB, struct dBaseElement *actElem, struct foundElemData *isElementInCateg);
+struct dBaseElement *getInfo();
 
-void addItem(struct dBase *dB,  struct foundElemData *isElementInCateg, dBaseElement *newElem);
+void itemOption(struct dBase *dB, struct dBaseElement *actElem);
+
+void addItem(struct dBase *dB, dBaseElement *newElem);
 
 void addItemAfter(struct foundElemData *isElementInCateg, dBaseElement *newElem);
 
@@ -151,15 +150,16 @@ void addFirstItem(struct dBCategory *Category, dBaseElement *newElem);
 
 void scrollDB(struct dBase *dB);
 
+char *FGETS(char *str, int num, FILE *stream);
+
+
 int main()
-{
-    
+{    
     char usrAnswr = 's';
     int tempInt = 0;
-    struct dBase *MuzShop = NULL;
-    
-    clearscr();
+    struct dBase *MuzShop = NULL;   
 
+    clearscr();
     while(tempInt != 4)
     {
         if(MuzShop != NULL)
@@ -174,23 +174,36 @@ int main()
         scanf("%d", &tempInt);
         clearscr();
         if(tempInt == 0)
+        {
             scrollDB(MuzShop);
+            clearscr();
+        }    
         else if(tempInt == 1 && MuzShop == NULL)
         {
             MuzShop = dBAlloc();
             initDataBase(MuzShop);
+            printf("database is initialized");
         }
         else if(tempInt == 2 && MuzShop != NULL)
+        {
             delDataBase(MuzShop);
+            printf("database successfully deleted\n");
+        }
         else if(tempInt == 3 && MuzShop != NULL)
         {
             FILE *fl;
-            fl = fopen("input.txt", "r");
+            fl = fopen("database/input.txt", "r");    
+            feof(fl);        
             readFromFile(MuzShop, fl);
             fclose(fl);
+            clearscr();
+            printf("file is succesfully read\n");
         }
+        else if(tempInt == 4)
+            if(MuzShop != NULL)
+                delDataBase(MuzShop);
+        
     }
-    
     
     return 0;
 }
@@ -202,7 +215,10 @@ void clearscr ( void )
 
 struct dBaseElement *musElemAlloc(void)
 {
-    return (struct dBaseElement *)malloc(sizeof(struct dBaseElement));
+    struct dBaseElement *output = (struct dBaseElement *)malloc(sizeof(struct dBaseElement));
+    output->nextItem = NULL;
+    output->prevItem = NULL;
+    return output;
 }
 
 struct dBCategory *categAlloc(void)
@@ -245,8 +261,6 @@ void initDataBase(struct dBase *dB)
     dB->categQuant = 3;
 
     tempCateg = NULL;
-
-    printf("\nDB initialized\n");
 }
 
 void delDataBase(struct dBase *dB)
@@ -273,155 +287,6 @@ void delDataBase(struct dBase *dB)
     }
     free(pTempCateg);   
     free(dB);
-    printf("\nDB is deleted successfuly\n");
-}
-
-void createNewElement(struct dBase *dB)
-{
-    struct dBCategory *dBCategory = dB->firstCateg;
-    enum instr instr_categ;
-    int temp = 0;
-    while(temp < 1 || temp > 3)
-    {
-        printf("\nwhats the category of instrument?\n\
-1| guitar\n\
-2| bass\n\
-3| synth");
-        scanf("%d", &temp);
-        clearscr();
-    }
-    instr_categ = (enum instr)temp;
-    while(dBCategory->musInstrCategory != instr_categ && dBCategory->nextCategory != NULL)
-    {
-        dBCategory = dBCategory->nextCategory;
-    }
-    if(dBCategory->musInstrCategory != instr_categ)
-        printf("!!! u have problems with categs 298 line !!!");
-
-    struct dBaseElement *newElem = getInfo(instr_categ);
-    struct foundElemData *isElementInCateg = findElem(dBCategory, newElem);
-
-    addItem(dB, isElementInCateg, newElem);
-}
-
-struct dBaseElement *getInfo(enum instr instr_categ)
-{
-    struct dBaseElement *newElem = musElemAlloc();
-    
-    char usrAns = 'n';
-    newElem->aboutElem.instrType = instr_categ;
-
-    clearscr();
-    gets(newElem->aboutElem.company_name);
-    printf("item company name : ");
-    gets(newElem->aboutElem.company_name);
-
-    printf("\nitem model company name : ");
-    gets(newElem->aboutElem.model_name);
-    
-    printf("\nweight of the item (kg) : ");
-    cin >> newElem->aboutElem.weight;
-    
-    printf("\nwas this item in use before (y/n) : ");
-    scanf("%c", &usrAns);
-    if(usrAns == 'y')
-        newElem->aboutElem.wasInUse = true;
-    printf("\n\n");
-
-    unsInt tempInt; // for dereference || reduction to bit type int
-    if(instr_categ == guitar)
-    {
-        printf("\n\nhow many frets it has : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.guiInfo.frets = tempInt;
-
-        printf("\nis it left or right handed \n\
-1) Left handed\n\
-2) Right handed\n");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.guiInfo.hand = (enum handOrientation)tempInt;
-        
-        printf("\ntype of the neck \n\
-1) BOLT_ON\n\
-2) SET_NECK\n\
-3) NECK_TROUGH\n");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.guiInfo.neck = (enum neck)tempInt;
-
-        printf("number of strings : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.guiInfo.strings = tempInt;
-    }
-    else if(instr_categ == bass_guitar)
-    {
-        printf("\nbass type\n");
-        printf("1) PBASS\n\
-2) JBASS\n\
-3) HALF_ACOUSTIC\n\
-4) NO_FRETS");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.bassInfo.typeOfBass = (enum bassType)tempInt;
-        
-        printf("strings number : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.bassInfo.strings = tempInt;
-
-        printf("\nnecktype\n\
-1) Bolt On\n\
-2) Set neck\n\
-3) Neck through\n\
-_________________\n");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.bassInfo.neck = (enum neck)tempInt;
-
-        printf("\nfrets number : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.bassInfo.frets = tempInt;
-
-        printf("\nis it left or right handed \n\
-1) Left handed\n\
-2) Right handed\n");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.bassInfo.hand = (enum handOrientation)tempInt;
-        
-    }
-    else if(instr_categ == synth)
-    {
-        printf("\ndoes it has hammer imitating mechanism\n\
-1) No\n\
-2) Yes");
-        scanf("%d", &tempInt);
-        tempInt -= 1;
-        newElem->aboutElem.adv.synInfo.imitHamMech = (enum logic)tempInt;
-
-        printf("\nhow many keys : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.synInfo.keys = tempInt;
-
-        printf("\ndoes it has usb?\n\
-1) Yes\n\
-2) No");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.synInfo.usb = (enum logic)tempInt;
-
-        printf("\ndoes it has modualtion wheel?\n\
-1) Yes\n\
-2) No");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.synInfo.modulWheel = (enum logic)tempInt;
-        
-        printf("\nhow many analog output instrument has : ");
-        scanf("%d", &tempInt);
-        newElem->aboutElem.adv.synInfo.analOutput = tempInt;
-    }
-    newElem->nextItem = NULL;
-    newElem->prevItem = NULL;
-    return newElem;
 }
 
 void readFromFile(struct dBase *dB, FILE *file)
@@ -429,15 +294,16 @@ void readFromFile(struct dBase *dB, FILE *file)
     if (feof(file))
 		fseek(file, 0, SEEK_SET);
 	char str[256];
+    int temp;
+    struct dBaseElement *newElem;
     while (!feof(file))
 	{
-        struct dBaseElement *newElem = musElemAlloc();
-        int temp;
+        newElem = musElemAlloc();
 
-        fgets(str, 255, file);
-		while (str[0] == '\n')
+        FGETS(str, 30, file);
+		while (str[0] == '\n' || str[0] == '\0')
 		{
-			fgets(str, 255, file);
+			FGETS(str, 30, file);
 			if (feof(file))
 				return;
 		}
@@ -449,18 +315,18 @@ void readFromFile(struct dBase *dB, FILE *file)
             newElem->aboutElem.instrType = synth;
         
         //company name
-        fgets(str, 30, file);
+        fscanf(file, "%s", str);
         strcpy(newElem->aboutElem.company_name, str);
 
         //company mail
-        fgets(str, 30, file);
+        fscanf(file, "%s", str);
         strcpy(newElem->aboutElem.company_mail, str);
 
         //item model name
-        fgets(str, 30, file);
+        fscanf(file, "%s", str);
         strcpy(newElem->aboutElem.model_name, str);
 
-        fgets(str, 30, file);
+        fscanf(file, "%s", str);
         if(str[0] == 'y')
             newElem->aboutElem.wasInUse = true;
         else
@@ -468,49 +334,70 @@ void readFromFile(struct dBase *dB, FILE *file)
         
         //weight
         //fgets(str, 30, file);
-        fscanf(file, "%s%lf", str, &(newElem->aboutElem.weight));
+        fscanf(file, "%lf", &(newElem->aboutElem.weight));
+        newElem->aboutElem.weight = int(newElem->aboutElem.weight * 10) / 10.;
 
         //number of item
-        fscanf(file, "%s%d", str, &(newElem->aboutElem.itemNumb));        
+        fscanf(file, "%d", &(newElem->aboutElem.itemNumb));        
         
         //price
-        fscanf(file, "%s%d", str, &(newElem->aboutElem.price));        
+        fscanf(file, "%d", &(newElem->aboutElem.price));        
         
         //year of produce
-        newElem->aboutElem.yearProduce = 0;
-        fscanf(file, "%s%d", str, &(temp));        
+        fscanf(file, "%d", &(temp));        
         newElem->aboutElem.yearProduce = temp;
 
         if(newElem->aboutElem.instrType == guitar)
         {
-            fscanf(file, "%s%d", str, &(temp));
+            fscanf(file, "%d%s", &(temp), str);
             newElem->aboutElem.adv.guiInfo.frets = temp;
-
-            fgets(str, 30, file);
             if(strcmp(str, "LH") == 0 || strcmp(str, "lh") == 0)
                 newElem->aboutElem.adv.guiInfo.hand = LH;
             else
                 newElem->aboutElem.adv.guiInfo.hand = RH;  
             
-            fgets(str, 30, file);
-            if(strcmp(str, "BO") == 0 || strcmp(str, "bo") == 0)
+            fscanf(file, "%s", str);
+            if(strcmp(str, "BO") == 0 || strcmp(str, "bo") == 0 ||
+                strcmp(str, "bolt_neck") == 0 || strcmp(str, "BOLT_NECK") == 0)
                 newElem->aboutElem.adv.guiInfo.neck = BOLT_ON;
-            else if(strcmp(str, "SN") == 0 || strcmp(str, "sn") == 0)
+            else if(strcmp(str, "SN") == 0 || strcmp(str, "sn") == 0 ||
+                    strcmp(str, "SET_NECK") == 0 || strcmp(str, "set_neck") == 0)
                 newElem->aboutElem.adv.guiInfo.neck = SET_NECK;
-            else if(strcmp(str, "NT") == 0 || strcmp(str, "nt") == 0)
+            else if(strcmp(str, "NT") == 0 || strcmp(str, "nt") == 0 ||
+                    strcmp(str, "NECK_TROUGH") == 0 || strcmp(str, "neck_trough") == 0)
                 newElem->aboutElem.adv.guiInfo.neck = NECK_TROUGH;
             else
                 printf("problem with neck definition, 486 line");
             
-            fscanf(file, "%s%d", str, &(temp));
+            fscanf(file, "%d", &(temp));
             newElem->aboutElem.adv.guiInfo.strings = temp;
         }
         else if(newElem->aboutElem.instrType == bass_guitar)
         {
-            fscanf(file, "%s%d", str, &(temp));
-            newElem->aboutElem.adv.bassInfo.frets = temp;
+            fscanf(file, "%d%s", &(temp), str);
+            newElem->aboutElem.adv.guiInfo.frets = temp;
+            if(strcmp(str, "LH") == 0 || strcmp(str, "lh") == 0)
+                newElem->aboutElem.adv.guiInfo.hand = LH;
+            else
+                newElem->aboutElem.adv.guiInfo.hand = RH;
 
-            fgets(str, 30, file);
+            fscanf(file, "%s", str);
+            if(strcmp(str, "BO") == 0 || strcmp(str, "bo") == 0 ||
+                strcmp(str, "bolt_neck") == 0 || strcmp(str, "BOLT_NECK") == 0)
+                newElem->aboutElem.adv.guiInfo.neck = BOLT_ON;
+            else if(strcmp(str, "SN") == 0 || strcmp(str, "sn") == 0 ||
+                    strcmp(str, "SET_NECK") == 0 || strcmp(str, "set_neck") == 0)
+                newElem->aboutElem.adv.guiInfo.neck = SET_NECK;
+            else if(strcmp(str, "NT") == 0 || strcmp(str, "nt") == 0 ||
+                    strcmp(str, "NECK_TROUGH") == 0 || strcmp(str, "neck_trough") == 0)
+                newElem->aboutElem.adv.guiInfo.neck = NECK_TROUGH;
+            else
+                printf("problem with neck definition, 486 line");
+
+            fscanf(file, "%d", &(temp));
+            newElem->aboutElem.adv.bassInfo.strings = temp;
+
+            fscanf(file, "%s", str);
             if(strcmp(str, "precision") == 0)
                 newElem->aboutElem.adv.bassInfo.typeOfBass = PRECISION;
             else if(strcmp(str, "jazz") == 0)
@@ -519,63 +406,56 @@ void readFromFile(struct dBase *dB, FILE *file)
                 newElem->aboutElem.adv.bassInfo.typeOfBass = HALF_ACOUSTIC;
             else if(strcmp(str, "nofrets") == 0 || strcmp(str, "no frets") == 0)
                 newElem->aboutElem.adv.bassInfo.typeOfBass = NO_FRETS;
-            
-            fscanf(file, "%s%d", str, &(temp));
-            newElem->aboutElem.adv.bassInfo.strings = temp;
         }
         else if(newElem->aboutElem.instrType == synth)
         {
-            fgets(str, 30, file);
+            fscanf(file, "%s", str);
             if(str[0] == 'y')
                 newElem->aboutElem.adv.synInfo.imitHamMech = YES;
             else
                 newElem->aboutElem.adv.synInfo.imitHamMech = NO;
             
-            fscanf(file, "%s%d", str, &(temp));
+            fscanf(file, "%d", &(temp));
             newElem->aboutElem.adv.synInfo.keys = temp;
 
-            fgets(str, 30, file);
+            fscanf(file, "%s", str);
             if(str[0] == 'y')
                 newElem->aboutElem.adv.synInfo.usb = YES;
             else
                 newElem->aboutElem.adv.synInfo.usb = NO;
             
-            fgets(str, 30, file);
+            fscanf(file, "%s", str);
             if(str[0] == 'y')
                 newElem->aboutElem.adv.synInfo.modulWheel = YES;
             else
                 newElem->aboutElem.adv.synInfo.modulWheel = NO;
             
-            fscanf(file, "%s%d", str, &(temp));
+            fscanf(file, "%d", &(temp));
             newElem->aboutElem.adv.synInfo.analOutput = temp;
         }
-        
+
+        addItem(dB, newElem);
     }
 }
 
-struct foundElemData *findElem(struct dBCategory *givenCateg, struct dBaseElement *potElement)
+struct foundElemData *findElem(struct dBase *dB, struct dBaseElement *potElement)
 {
     struct foundElemData *output = (struct foundElemData *)malloc(sizeof(struct foundElemData));
+    output->found_element = NULL;
+    output->isSame = DIFFERENT;
     enum comparing tempStatus = DIFFERENT;
     //temp elem to save data about similar item 
     struct dBaseElement *foundElem = NULL;
-    struct dBaseElement *tempElement = givenCateg->dBFirstElem;
-    
+    struct dBaseElement *tempElement = getCateg(dB, potElement)->dBFirstElem;
+
+    /*
+    if(givenCateg->nextCategory = NULL && givenCateg != potElement->aboutElem.instrType)
+        print("theres no such category in db");
+    */
+
     //checking first element of a category
-    tempStatus = dBaseElemsCmp(tempElement, potElement);
-    if(tempStatus == SAME)
+    if(tempElement != NULL)
     {
-        output->found_element = tempElement;
-        output->isSame = SAME;
-    }
-    else if(tempStatus == SIMILAR)
-    {
-        foundElem = tempElement;
-    }
-    //checkig other elements of a category
-    while(tempElement->nextItem != NULL && output->isSame != SAME)
-    {
-        tempElement = tempElement->nextItem;
         tempStatus = dBaseElemsCmp(tempElement, potElement);
         if(tempStatus == SAME)
         {
@@ -586,13 +466,42 @@ struct foundElemData *findElem(struct dBCategory *givenCateg, struct dBaseElemen
         {
             foundElem = tempElement;
         }
-    }
-    if(output->isSame == DIFFERENT && foundElem != NULL)
-    {
-        output->found_element = foundElem;
-        output->isSame = SIMILAR;
+        //checkig other elements of a category
+        while(tempElement->nextItem != NULL && output->isSame != SAME)
+        {
+            tempElement = tempElement->nextItem;
+            tempStatus = dBaseElemsCmp(tempElement, potElement);
+            if(tempStatus == SAME)
+            {
+                output->found_element = tempElement;
+                output->isSame = SAME;
+            }
+            else if(tempStatus == SIMILAR)
+            {
+                foundElem = tempElement;
+            }
+        }
+        if(output->isSame == DIFFERENT && foundElem != NULL)
+        {
+            output->found_element = foundElem;
+            output->isSame = SIMILAR;
+        }
     }
     return output;
+}
+
+struct dBCategory *getCateg(struct dBase *dB, struct dBaseElement *elem)
+{
+    struct dBCategory *categ = dB->firstCateg;     
+    while(categ->nextCategory != NULL && categ->musInstrCategory != elem->aboutElem.instrType)
+        categ = categ->nextCategory;
+    
+    if(categ->nextCategory == NULL && categ->musInstrCategory != elem->aboutElem.instrType)
+    {
+        categ = NULL;
+        printf("\nneed categ seems like not exist at all\n");
+    }
+    return categ;
 }
 
 //more likely getting from stock (sellin) than deleting
@@ -637,13 +546,12 @@ void delElem(struct dBase *dB, struct dBaseElement *elemToDel)
 enum comparing dBaseElemsCmp(struct dBaseElement *first, struct dBaseElement *second)
 {
     enum comparing output = DIFFERENT;
-
-    if(strcmp(first->aboutElem.company_name, second->aboutElem.company_name) &&
-        strcmp(first->aboutElem.model_name, second->aboutElem.model_name) &&
+    printf("%s",first->aboutElem.company_name);
+    if(strcmp(first->aboutElem.company_name, second->aboutElem.company_name) == 0 &&
+        strcmp(first->aboutElem.model_name, second->aboutElem.model_name) == 0 &&
         first->aboutElem.instrType == second->aboutElem.instrType)
         {
-            if(first->aboutElem.weight == second->aboutElem.weight &&
-                first->aboutElem.yearProduce == second->aboutElem.yearProduce && 
+            if(first->aboutElem.yearProduce == second->aboutElem.yearProduce && 
                 first->aboutElem.wasInUse == second->aboutElem.wasInUse)
                 {
                     output = SAME;
@@ -657,15 +565,80 @@ enum comparing dBaseElemsCmp(struct dBaseElement *first, struct dBaseElement *se
 void printAdvElemInfo(struct dBaseElement *element)
 {
     clearscr();
+    printf("\n___________________________________________\n");
     printf("Company name : %s\n", element->aboutElem.company_name);
     printf("Model name   : %s\n", element->aboutElem.model_name);
     printf("instrument type : ");
     if(element->aboutElem.instrType == guitar)
+    {
         printf("guitar\n");
+        printf("with %d strings\n", element->aboutElem.adv.guiInfo.strings);
+        printf("guitar has ");
+        if(element->aboutElem.adv.guiInfo.neck == 0)
+            printf("BOLT ON neck");
+        else if(element->aboutElem.adv.guiInfo.neck == 1)
+            printf("SET NECK \n");
+        else if(element->aboutElem.adv.guiInfo.neck == 2)
+            printf("NECK TROUGH");
+        printf("%d frets\n", element->aboutElem.adv.guiInfo.frets);
+        if(element->aboutElem.adv.guiInfo.hand == LH)
+            printf("and its LEFT HANDED\n");
+        else
+            printf("and its RIGH HANDED\n");
+
+    }
     else if(element->aboutElem.instrType == bass_guitar)
+    {
         printf("bass guitar\n");
+        printf("with %d strings\n", element->aboutElem.adv.bassInfo.strings);
+        printf("%d frets\n", element->aboutElem.adv.bassInfo.frets);
+        printf("type of bass : ");
+        if(element->aboutElem.adv.bassInfo.typeOfBass == PRECISION)
+            printf("PRECISION\n");
+        else if(element->aboutElem.adv.bassInfo.typeOfBass == JAZZ)
+            printf("JAZZ\n");
+        else if(element->aboutElem.adv.bassInfo.typeOfBass == NO_FRETS)
+            printf("NO FRETS\n");
+        else if(element->aboutElem.adv.bassInfo.typeOfBass == HALF_ACOUSTIC)
+            printf("HALF ACOUSTIC\n");
+
+        printf("bass guitar has ");  
+        if(element->aboutElem.adv.bassInfo.neck == 0)
+            printf("BOLT ON neck");
+        else if(element->aboutElem.adv.bassInfo.neck == 1)
+            printf("SET NECK \n");
+        else if(element->aboutElem.adv.bassInfo.neck == 2)
+            printf("NECK TROUGH");
+
+        if(element->aboutElem.adv.bassInfo.hand == LH)
+            printf("and its LEFT HANDED\n");
+        else
+            printf("and its RIGH HANDED\n");
+    }
     else if(element->aboutElem.instrType == synth)
+    {
         printf("synthesizer\n");
+        printf("with %d keys\n", element->aboutElem.adv.synInfo.keys);
+        printf("usb : ");
+        if(element->aboutElem.adv.synInfo.usb == 1)
+            printf("yes\n");
+        else
+            printf("no\n");
+
+        printf("modulation wheel : ");
+        if(element->aboutElem.adv.synInfo.modulWheel == 1)
+            printf("yes\n");
+        else
+            printf("no\n");
+        
+        printf("hammer imitation mechanism : ");
+        if(element->aboutElem.adv.synInfo.imitHamMech == 1)
+            printf("yes\n");
+        else
+            printf("no\n");
+        
+        printf("and %d analog outputs\n", element->aboutElem.adv.synInfo.analOutput);
+    }
     printf("\nnumb of the instrument we have in stock : %d\n", element->aboutElem.itemNumb);
     printf("the weight of the instrument : %f\n", element->aboutElem.weight);
     printf("was in use : ");
@@ -678,6 +651,7 @@ void printAdvElemInfo(struct dBaseElement *element)
         printf("no\n\n");    
     }
     printf("price : %d dollars\n", element->aboutElem.price);
+    printf("___________________________________________\n");
 }
 
 void printBasicElemInfo(struct dBaseElement *element)
@@ -711,59 +685,84 @@ void printCategInfo(struct dBCategory *category)
     printf("items numb in category : %lu\n", category->itemsNumb);
 }
 
-void itemOption(struct dBase *dB, struct dBaseElement *actElem, struct foundElemData *isElementInCateg)
+struct dBaseElement *getInfo()
+{
+    struct dBaseElement *potElem = musElemAlloc();
+    int temp = -1;
+
+    printf("\ncompany name : ");
+    scanf("%s", potElem->aboutElem.company_name);
+    printf("\nitem model name : ");
+    scanf("%s", potElem->aboutElem.model_name);
+    printf("\ncategory of the instrument");
+    while(temp < 1 || temp > 3){
+        printf("\n1| guitar\n2| Bass guitar\n3| synth\n");
+        scanf("%d", &temp);
+    }
+    potElem->aboutElem.instrType = (enum instr)(temp - 1);
+    printf("year of produce : ");
+    scanf("%d", &(temp));
+    potElem->aboutElem.yearProduce = temp;
+    printf("was it in use\n1| yes\n2| no\n");
+    scanf("%d", &temp);
+    if(temp == 1)
+        potElem->aboutElem.wasInUse = YES;
+    else
+        potElem->aboutElem.wasInUse = NO;
+    return potElem;
+}
+
+void itemOption(struct dBase *dB, struct dBaseElement *actElem)
 {
     int tempInt = 0;
     while(tempInt != 5){
-        clearscr();
-        printBasicElemInfo(actElem);
-        if(isElementInCateg == NULL || isElementInCateg->isSame == SAME)
+        
+        if(tempInt != 4)
         {
-            printf("1| Stock item\n");
-            if(actElem->aboutElem.itemNumb > 0)
-                printf("2| Withdraw item\n");
-            printf("3| Delete item from base\n");
+            clearscr();
+            printBasicElemInfo(actElem);
         }
-        else if(isElementInCateg != NULL && isElementInCateg->isSame == SIMILAR)
-        {
-            printf("1| This element is the same, change the status to SAME\n");
-            printf("2| Add as new element\n");
-        }
-        printf("4| Show advance info about item\n\
-5| Back to scroll\n");
+        printf("1| Stock item\n");
+        if(actElem->aboutElem.itemNumb > 0)
+            printf("2| Withdraw item\n");
+        printf("3| Delete item from base\n");
+        printf("4| Show advance info about item\n");
+        printf("5| Back to scroll\n");
         scanf("%d", &tempInt);
 
         if(tempInt == 1)
-        {
-            if(isElementInCateg == NULL || isElementInCateg->isSame == SAME)
+        {           
+            printf("how manny do u wanna stock?\n");
+            tempInt = -1;
+            while(tempInt < 0)
             {
-                printf("how manny do u wanna stock?\n");
                 scanf("%d", &tempInt);
-                actElem->aboutElem.itemNumb += tempInt;
+                if(tempInt < 0)
+                    printf("cant stock negative number of items, write positive or zero\n\n");
             }
-            else if(isElementInCateg != NULL && isElementInCateg->isSame == SIMILAR)
-            {
-                isElementInCateg->isSame = SAME;
-            }
+            actElem->aboutElem.itemNumb += tempInt;   
         }
         else if(tempInt == 2)
         {
-            if(isElementInCateg->isSame == SAME && actElem->aboutElem.itemNumb > 0)
+            clearscr();
+            printBasicElemInfo(actElem);
+            
+            tempInt = -1;
+            while(tempInt < 0 || tempInt > actElem->aboutElem.itemNumb)
             {
-                clearscr();
-                printBasicElemInfo(actElem);
                 printf("we have %d\n", actElem->aboutElem.itemNumb);
+                printf("print '0' to escape\n");
                 printf("how many do u wanna withdraw : ");
                 scanf("%d", &tempInt);
-                if(tempInt > actElem->aboutElem.itemNumb)
-                    printf("\nwe dont have such number of instrument");
+                if(tempInt < 0)
+                    printf("cant stock negative number of items, write positive or zero\n\n");
+                else if(tempInt > actElem->aboutElem.itemNumb)
+                    printf("\nwe dont have such number of instrument"); 
             }
-            else if(isElementInCateg != NULL && isElementInCateg->isSame == SIMILAR)
-            {
-                addItem(dB, isElementInCateg, actElem);
-            }
+            if(tempInt != 0)
+                withdrawElements(dB, actElem, tempInt);  
         }
-        else if(tempInt == 3 && (isElementInCateg == NULL || isElementInCateg->isSame == SAME))
+        else if(tempInt == 3)
         {
             struct dBaseElement *temp;
             if(actElem->prevItem != NULL)
@@ -784,54 +783,27 @@ void itemOption(struct dBase *dB, struct dBaseElement *actElem, struct foundElem
     }
 }
 
-void addItem(struct dBase *dB, struct foundElemData *isElementInCateg, dBaseElement *newElem)
-{
-    struct dBCategory *dBCategory = dB->firstCateg;
-    while(dBCategory != NULL && dBCategory->musInstrCategory != newElem->aboutElem.instrType)
-    {
-        dBCategory = dBCategory->nextCategory;
-    }
-    char userAnswer = 'n';
-    int temp;
+void addItem(struct dBase *dB, dBaseElement *newElem)
+{   
+    struct foundElemData *isElementInCateg = findElem(dB, newElem);
+
     if(isElementInCateg->isSame == SAME)
     {
-
-        printf("\nsuch element s already exist, wanna store? (y/n)\n");
-        scanf("%c", &userAnswer);
-        if(userAnswer == 'Y' || userAnswer == 'y')
-        {
-            printf("\nhow many? (number)\n");
-            scanf("%d", &temp);
-            isElementInCateg->found_element->aboutElem.itemNumb += temp;
-        }
+        isElementInCateg->found_element->aboutElem.itemNumb += newElem->aboutElem.itemNumb;
     }
     else if(isElementInCateg->isSame == SIMILAR)
     {
-        printf("\nwe have similar item to this, wanna add? It will be stored close to the found one (y/n)\n");
-        scanf("%c", &userAnswer);
-        if(userAnswer == 'Y' || userAnswer == 'y')
-        {
-            if(isElementInCateg->found_element->aboutElem.wasInUse == 1)
-            {
-                //wasInUse == 1 znachit stavim posle foundElem
-                addItemAfter(isElementInCateg, newElem);
-            }
-            else
-            {
-                //wasInUse == 0 znachit do foundElem
-                addItemBefore(isElementInCateg, newElem);
-            }
-        }
+        if(isElementInCateg->found_element->aboutElem.wasInUse == 1)
+            //wasInUse == 1 znachit stavim posle foundElem
+            addItemAfter(isElementInCateg, newElem);
+        else
+            //wasInUse == 0 znachit do foundElem
+            addItemBefore(isElementInCateg, newElem);
     }
     else
     {
-        printf("\nwe dont have such item in our base, wanna add elem? (y/n)\n");
-        scanf("%c", &userAnswer);
-        if(userAnswer == 'Y' || userAnswer == 'y')
-        {
-            //no elements in categ
-            addFirstItem(dBCategory, newElem);
-        }
+        //no elements in categ
+        addFirstItem(getCateg(dB, newElem), newElem);
     }
 }
 
@@ -876,13 +848,14 @@ void scrollDB(struct dBase *dB)
 {
     enum instr actCateg;
     char usrAnswr;
-    unsInt tempInt = 5;
+    unsInt tempInt = 6;
     struct dBCategory *scrollingCategory = dB->firstCateg;
     struct dBaseElement *actElem;
-    
-    while(tempInt != 6)
+    int exit = 5;
+
+    while(tempInt != exit)
     {
-        while(tempInt > 6)
+        while(tempInt > exit)
         {
             clearscr();
             printf("items from which category wanna see?\n\
@@ -890,27 +863,23 @@ void scrollDB(struct dBase *dB)
 2| basses\n\
 3| synths\n\
 4| find element\n\
-5| create new element\n\
-6| exit");
+5| exit\n");
             scanf("%d", &tempInt);
         }
-        if(tempInt == 6)
+        if(tempInt == 5)
             break;
-        else if(tempInt == 5)
-        {
-            createNewElement(dB);
-        }else if(tempInt == 4)
+        else if(tempInt == 4)
         {
             enum instr instr_categ;
             int temp = 0;
             while(temp < 1 || temp > 3)
             {
-            printf("\nwhats the category of instrument?\n\
+                printf("\nwhats the category of instrument?\n\
 1| guitar\n\
 2| bass\n\
 3| synth");
-            scanf("%d", &temp);
-            clearscr();
+                scanf("%d", &temp);
+                clearscr();
             }
             instr_categ = (enum instr)temp;
             struct dBCategory *dBCategory = dB->firstCateg;
@@ -921,19 +890,20 @@ void scrollDB(struct dBase *dB)
             if(dBCategory->musInstrCategory != instr_categ)
                 printf("!!! u have problems with categs 298 line !!!");
             
-            struct dBaseElement *elemToFind = getInfo(instr_categ);
-            struct foundElemData *isElementInCateg = findElem(dBCategory, elemToFind);
+            struct dBaseElement *elemToFind = getInfo();
+            struct foundElemData *isElementInCateg = findElem(dB, elemToFind);
             if(isElementInCateg->found_element != NULL)
             {
-                itemOption(dB, actElem, isElementInCateg);
-            }
+                itemOption(dB, actElem);
+            }else
+                printf("\n\nsuch item doesnt exist, check input information\n");
         }else if(tempInt < 4 && tempInt > 0)
         {
             tempInt -= 1;
             actCateg = (enum instr)tempInt;
 
             while(scrollingCategory->musInstrCategory != actCateg && 
-                scrollingCategory != NULL)
+                scrollingCategory->nextCategory != NULL)
             {
                 scrollingCategory = scrollingCategory->nextCategory;
             }
@@ -959,22 +929,31 @@ void scrollDB(struct dBase *dB)
                     scanf("%d", &tempInt);
                 }else
                 {
-                    printf("actual category is empty, wanna add item? (y/n)");
-                    scanf("%c", &usrAnswr);
-                    if(usrAnswr == 'y')
-                    {
-                        createNewElement(dB);
-                    }
+                    printf("actual category is empty\n");
+                    tempInt = 3;
                 }
                 if(tempInt == 2)
                 {
-                    itemOption(dB, actElem, NULL);
+                    itemOption(dB, actElem);
                 }
                 else if(tempInt == 0 && actElem->prevItem != NULL)
                     actElem = actElem->prevItem;
                 else if(tempInt == 1 && actElem->nextItem != NULL)
                     actElem = actElem->nextItem;
             }
+            tempInt = 6;
         }
     }
+}
+
+char *FGETS(char *str, int num, FILE *stream)
+{
+    fgets(str, num, stream);
+    int i = 0;
+    char enter = '\n';
+    while(i < num && str[i] != '\0' && str[i] != '\n')
+        i++;
+    if(str[i] == '\n')
+        str[i] = '\0';
+    return str;
 }

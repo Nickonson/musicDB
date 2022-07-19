@@ -1,0 +1,43 @@
+instr type : guitar
+company name : 
+company mail :
+item model name :
+was in use (y/n) :
+weight : 
+item numb :
+price : 
+year of produce : 
+frets : 
+left / right hand (LH/RG) :
+type of neck (BOLT_ON, SET_NECK, NECK_TROUGH) :
+strings number :
+
+instr type : bass guitar
+company name :
+company mail :
+item model name :
+was in use (y/n) :
+weight :
+item numb :
+price : 
+year of produce :
+frets : 
+left / right hand (LH/RG) :
+type of neck (BOLT_ON, SET_NECK, NECK_TROUGH) :
+strings number :
+bass type (precision, jazz, half acoustic, no frets): 
+
+instr type : synth
+company name :
+company mail :
+item model name :
+was in use (y/n) :
+weight :
+number of item :
+price :
+year of produce : 
+hammer imitation(y, n) : 
+number of keys :
+USB (y/n) :
+modulation wheel (y/n) :
+number of analog output : 
