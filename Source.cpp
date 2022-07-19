@@ -7,11 +7,6 @@
 #include <cmath>
 #include <string>
 
-/*
-
-    problems with scrolling back / forward exist sometimes
-*/
-
 using namespace std;
 
 enum instr{guitar = 0, bass_guitar, synth};
