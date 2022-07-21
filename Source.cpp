@@ -9,36 +9,36 @@
 
 using namespace std;
 
-enum instr{guitar = 0, bass_guitar, synth};
+enum __attribute__((packed)) instr{guitar = 0, bass_guitar, synth};
 
-enum neck{BOLT_ON = 0, SET_NECK, NECK_TROUGH};
+enum __attribute__((packed)) neck{BOLT_ON = 0, SET_NECK, NECK_TROUGH};
 
-enum bassType{PRECISION = 0, JAZZ, HALF_ACOUSTIC, NO_FRETS};
+enum __attribute__((packed)) bassType{PRECISION = 0, JAZZ, HALF_ACOUSTIC, NO_FRETS};
 
-enum logic{NO = 0, YES};
+enum __attribute__((packed)) logic{NO = 0, YES};
 
-enum comparing{DIFFERENT = 0, SAME, SIMILAR};
+enum __attribute__((packed)) comparing{DIFFERENT = 0, SAME, SIMILAR};
 
-enum handOrientation{LH = 0, RH};
+enum __attribute__((packed)) handOrientation{LH = 0, RH};
 
 //structs
 
-struct bassInfo
+struct __attribute__((packed)) bassInfo
 {
     enum bassType typeOfBass : 2;
     unsInt strings : 4;
     enum neck neck : 2;
-    unsInt frets : 5;
+    unsInt frets : 6;
     enum handOrientation hand : 1;
-}; // 14
-struct guitarInfo
+}; // 15
+struct __attribute__((packed)) guitarInfo
 {
     unsInt strings : 6;
     enum neck neck : 2;
     unsInt frets : 6;
     enum handOrientation hand : 1;
-}; // 14
-struct synthInfo
+}; // 15
+struct __attribute__((packed)) synthInfo
 {
     unsInt keys : 7;
     enum logic usb : 1;
@@ -88,7 +88,7 @@ struct dBCategory
 };
 struct dBase
 {
-    unsInt categQuant = 0;
+    unsInt categQuant;
     struct dBCategory *firstCateg;
     struct dBCategory *lastCateg;
 };
@@ -129,17 +129,15 @@ void printBasicElemInfo(struct dBaseElement *element);
 
 void printCategInfo(struct dBCategory *category);
 
-void delElem(struct dBase *dB, struct dBaseElement *elemToDel);
-
 struct dBaseElement *getInfo();
 
 void itemOption(struct dBase *dB, struct dBaseElement *actElem);
 
 void addItem(struct dBase *dB, dBaseElement *newElem);
 
-void addItemAfter(struct foundElemData *isElementInCateg, dBaseElement *newElem);
+void addItemAfter(struct dBCategory *Category, struct foundElemData *isElementInCateg, dBaseElement *newElem);
 
-void addItemBefore(struct foundElemData *isElementInCateg, dBaseElement *newElem);
+void addItemBefore(struct dBCategory *Category, struct foundElemData *isElementInCateg, dBaseElement *newElem);
 
 void addFirstItem(struct dBCategory *Category, dBaseElement *newElem);
 
@@ -150,6 +148,8 @@ char *FGETS(char *str, int num, FILE *stream);
 
 int main()
 {    
+    printf("%lu", sizeof(struct dBaseElement));
+    
     char usrAnswr = 's';
     int tempInt = 0;
     struct dBase *MuzShop = NULL;   
@@ -177,7 +177,7 @@ int main()
         {
             MuzShop = dBAlloc();
             initDataBase(MuzShop);
-            printf("database is initialized");
+            printf("database is initialized\n");
         }
         else if(tempInt == 2 && MuzShop != NULL)
         {
@@ -195,12 +195,14 @@ int main()
             printf("file is succesfully read\n");
         }
         else if(tempInt == 4)
+        {    
             if(MuzShop != NULL)
                 delDataBase(MuzShop);
+        }
         
     }
     
-    return 0;
+    return 0;   
 }
 
 void clearscr ( void )
@@ -218,39 +220,37 @@ struct dBaseElement *musElemAlloc(void)
 
 struct dBCategory *categAlloc(void)
 {
-    return (struct dBCategory *)malloc(sizeof(struct dBCategory));
+    struct dBCategory *output = (struct dBCategory *)malloc(sizeof(struct dBCategory));
+    output->dBFirstElem = NULL;
+    output->dBLastElem = NULL;
+    output->nextCategory = NULL;
+    output->prevCategory = NULL;
+    output->itemsNumb = 0;
+    return output;
 }
 
 struct dBase *dBAlloc(void)
 {
-    return (struct dBase *)malloc(sizeof(struct dBase));
+    struct dBase *output = (struct dBase *)malloc(sizeof(struct dBase));
+    output->categQuant = 0;
+    output->firstCateg = NULL;
+    output->lastCateg = NULL;
+    return output;
 }
 
 void initDataBase(struct dBase *dB)
 {
     struct dBCategory *tempCateg = categAlloc();
-
     dB->firstCateg = tempCateg;
-
     tempCateg->musInstrCategory = guitar;
-    tempCateg->itemsNumb = 0;
-    tempCateg->dBFirstElem = NULL;
-    tempCateg->dBLastElem = NULL;
 
     tempCateg->nextCategory = categAlloc();
-    tempCateg = tempCateg->nextCategory;
-    
+    tempCateg = tempCateg->nextCategory;    
     tempCateg->musInstrCategory = bass_guitar;
-    tempCateg->itemsNumb = 0;
-    tempCateg->dBFirstElem = NULL;
-    tempCateg->dBLastElem = NULL;
+
     tempCateg->nextCategory = categAlloc();
     tempCateg = tempCateg->nextCategory;  
-
     tempCateg->musInstrCategory = synth;
-    tempCateg->itemsNumb = 0;
-    tempCateg->dBFirstElem = NULL;
-    tempCateg->dBLastElem = NULL;  
 
     dB->lastCateg = tempCateg;
     dB->categQuant = 3;
@@ -261,10 +261,9 @@ void initDataBase(struct dBase *dB)
 void delDataBase(struct dBase *dB)
 {
     struct dBCategory *pTempCateg = dB->firstCateg;
-    struct dBaseElement *pTempElem;
+    struct dBaseElement *pTempElem = pTempCateg->dBFirstElem;
     
     while(pTempCateg != NULL){
-        pTempElem = pTempCateg->dBFirstElem;
         if(pTempElem != NULL)
         {
             while(pTempElem != pTempCateg->dBLastElem)
@@ -277,11 +276,16 @@ void delDataBase(struct dBase *dB)
         if(pTempCateg->nextCategory != NULL)
         {
             pTempCateg = pTempCateg->nextCategory;
+            pTempElem = pTempCateg->dBFirstElem;
             free(pTempCateg->prevCategory);
+        }else
+        {
+            free(pTempCateg);
+            pTempCateg = NULL;
         }
     }
-    free(pTempCateg);   
     free(dB);
+    dB = NULL;
 }
 
 void readFromFile(struct dBase *dB, FILE *file)
@@ -654,6 +658,13 @@ void printBasicElemInfo(struct dBaseElement *element)
     clearscr();
     printf("Company name : %s\n", element->aboutElem.company_name);
     printf("Model name   : %s\n", element->aboutElem.model_name);
+    printf("Year of producing : %d\n", element->aboutElem.yearProduce);
+    printf("was in use : ");
+    if(element->aboutElem.wasInUse)
+        printf("yes\n");
+    else
+        printf("no\n");    
+    
     printf("instrument type : ");
     if(element->aboutElem.instrType == guitar)
         printf("guitar\n");
@@ -790,10 +801,10 @@ void addItem(struct dBase *dB, dBaseElement *newElem)
     {
         if(isElementInCateg->found_element->aboutElem.wasInUse == 1)
             //wasInUse == 1 znachit stavim posle foundElem
-            addItemAfter(isElementInCateg, newElem);
+            addItemAfter(getCateg(dB, newElem), isElementInCateg, newElem);
         else
             //wasInUse == 0 znachit do foundElem
-            addItemBefore(isElementInCateg, newElem);
+            addItemBefore(getCateg(dB, newElem), isElementInCateg, newElem);
     }
     else
     {
@@ -802,7 +813,7 @@ void addItem(struct dBase *dB, dBaseElement *newElem)
     }
 }
 
-void addItemAfter(struct foundElemData *isElementInCateg, dBaseElement *newElem)
+void addItemAfter(struct dBCategory *Category, struct foundElemData *isElementInCateg, dBaseElement *newElem)
 {    
     if(isElementInCateg->found_element->nextItem != NULL)
     {
@@ -811,9 +822,12 @@ void addItemAfter(struct foundElemData *isElementInCateg, dBaseElement *newElem)
     }
     newElem->prevItem = isElementInCateg->found_element;
     isElementInCateg->found_element->nextItem = newElem;
+
+    if(newElem->nextItem == NULL)
+        Category->dBLastElem = newElem;
 }
 
-void addItemBefore(struct foundElemData *isElementInCateg, dBaseElement *newElem)
+void addItemBefore(struct dBCategory *Category, struct foundElemData *isElementInCateg, dBaseElement *newElem)
 {
     if(isElementInCateg->found_element->prevItem != NULL)
     {
@@ -822,6 +836,9 @@ void addItemBefore(struct foundElemData *isElementInCateg, dBaseElement *newElem
     }
     newElem->nextItem = isElementInCateg->found_element;
     isElementInCateg->found_element->prevItem = newElem;
+
+    if(newElem->prevItem == NULL)
+        Category->dBFirstElem = newElem;
 }
 
 void addFirstItem(struct dBCategory *Category, dBaseElement *newElem)
@@ -869,10 +886,12 @@ void scrollDB(struct dBase *dB)
             int temp = 0;
             while(temp < 1 || temp > 3)
             {
-                printf("\nwhats the category of instrument?\n\
+                printf("_____________________\n");
+                printf("whats the category of instrument?\n\
 1| guitar\n\
 2| bass\n\
-3| synth");
+3| synth\n");
+                printf("_____________________\n");
                 scanf("%d", &temp);
                 clearscr();
             }
@@ -882,14 +901,13 @@ void scrollDB(struct dBase *dB)
             {
                 dBCategory = dBCategory->nextCategory;
             }
-            if(dBCategory->musInstrCategory != instr_categ)
-                printf("!!! u have problems with categs 298 line !!!");
             
             struct dBaseElement *elemToFind = getInfo();
             struct foundElemData *isElementInCateg = findElem(dB, elemToFind);
             if(isElementInCateg->found_element != NULL)
             {
-                itemOption(dB, actElem);
+                printBasicElemInfo(isElementInCateg->found_element);
+                itemOption(dB, isElementInCateg->found_element);
             }else
                 printf("\n\nsuch item doesnt exist, check input information\n");
         }else if(tempInt < 4 && tempInt > 0)

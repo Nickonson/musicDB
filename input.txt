@@ -12,6 +12,34 @@ rh
 NECK_TROUGH
 6
 
+guitar
+hohner
+hohner@gmail.com
+hhc05
+n
+3.7
+5
+650
+1997
+36
+LH
+SET_NECK
+7
+
+guitar
+hohner
+hohner@gmail.com
+hlp23
+n
+3.7
+5
+639
+1993
+34
+LH
+SET_NECK
+7
+
 bass guitar
 yamaha
 yamahaaue@mail.com
